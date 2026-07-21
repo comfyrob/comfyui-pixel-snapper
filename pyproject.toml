@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-pixel-snapper"
+description = "Snap messy AI-generated pixel art to a perfect grid: detects the implicit pixel grid, quantizes colors, and outputs true native-resolution pixel art. Port of Sprite Fusion's pixel-snapper."
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = ["numpy"]
+
+[project.urls]
+Repository = "https://github.com/rslosh/comfyui-pixel-snapper"
+
+[tool.comfy]
+PublisherId = "rslosh"
+DisplayName = "Pixel Snapper"
