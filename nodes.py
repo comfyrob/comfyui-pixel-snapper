@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from typing_extensions import override
 
-from comfy_api.latest import ComfyExtension, io
+from comfy_api.latest import ComfyExtension, io, ui
 
 from .pixel_snapper import Config, PixelSnapperError, parse_palette_hex, snap_pixels
 
@@ -33,7 +33,11 @@ class PixelSnapper(io.ComfyNode):
                     default=16,
                     min=1,
                     max=256,
-                    tooltip="Number of palette colors to quantize down to (k-means).",
+                    tooltip=(
+                        "Maximum number of colors in the result. The node picks the "
+                        "best ones from the image automatically. Classic pixel art "
+                        "uses 4-32 colors."
+                    ),
                 ),
                 io.Int.Input(
                     "pixel_size",
@@ -41,8 +45,12 @@ class PixelSnapper(io.ComfyNode):
                     min=0,
                     max=4096,
                     tooltip=(
-                        "Size of one art pixel in the source image. 0 = auto-detect. "
-                        "Set explicitly for batches so every frame gets the same grid."
+                        "How big one 'art pixel' (one chunky block) is in the input, "
+                        "measured in real image pixels. Example: a 1024px-wide image "
+                        "that looks like 64 blocks across has 16px blocks, so "
+                        "pixel_size = 16. Leave at 0 to measure it automatically. Set "
+                        "it manually if auto-detect gets it wrong, or when processing "
+                        "a batch/animation so every frame uses the same grid."
                     ),
                 ),
                 io.String.Input(
@@ -69,22 +77,33 @@ class PixelSnapper(io.ComfyNode):
                 io.Image.Output(
                     "snapped_image",
                     display_name="image",
-                    tooltip="Snapped result scaled back to the input size (nearest-neighbor).",
+                    tooltip=(
+                        "The cleaned-up image at the SAME size as the input. Use this "
+                        "for previews and for feeding the rest of your workflow."
+                    ),
                 ),
                 io.Image.Output(
                     "native_image",
                     display_name="native image",
-                    tooltip="True native-resolution result: one pixel per detected grid cell.",
+                    tooltip=(
+                        "The true pixel-art file: ONE image pixel per art pixel, so "
+                        "it is tiny (e.g. 64x64). This is the asset you save for "
+                        "games/sprites. It looks like a small stamp in previews - "
+                        "that is expected."
+                    ),
                 ),
                 io.Mask.Output(
                     "native_mask",
                     display_name="native mask",
-                    tooltip="Transparency at native resolution (1 = transparent).",
+                    tooltip="Transparency for the native image (1 = transparent).",
                 ),
                 io.Float.Output(
                     "detected_pixel_size",
                     display_name="pixel size",
-                    tooltip="Detected (or overridden) size of one art pixel in the source image.",
+                    tooltip=(
+                        "The measured size of one art pixel in the input image "
+                        "(or the value you set)."
+                    ),
                 ),
             ],
         )
@@ -151,7 +170,14 @@ class PixelSnapper(io.ComfyNode):
             mode="nearest-exact",
         ).permute(0, 2, 3, 1)
 
-        return io.NodeOutput(full, native_image, native_mask, float(detected))
+        return io.NodeOutput(
+            full,
+            native_image,
+            native_mask,
+            float(detected),
+            # Inline preview on the node itself, like PreviewImage
+            ui=ui.PreviewImage(full, cls=cls),
+        )
 
 
 class PixelSnapperExtension(ComfyExtension):
