@@ -6,8 +6,8 @@ license = { file = "LICENSE" }
 dependencies = ["numpy"]
 
 [project.urls]
-Repository = "https://github.com/rslosh/comfyui-pixel-snapper"
+Repository = "https://github.com/comfyrob/comfyui-pixel-snapper"
 
 [tool.comfy]
-PublisherId = "rslosh"
+PublisherId = "comfyrob"
 DisplayName = "Pixel Snapper"

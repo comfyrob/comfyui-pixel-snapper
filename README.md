@@ -16,7 +16,7 @@ On your ComfyUI machine:
 
 ```bash
 cd /comfyui/custom_nodes
-git clone https://github.com/rslosh/comfyui-pixel-snapper.git
+git clone https://github.com/comfyrob/comfyui-pixel-snapper.git
 ```
 
 Restart ComfyUI. The node appears as **Pixel Snapper** under `image/pixel art`.
