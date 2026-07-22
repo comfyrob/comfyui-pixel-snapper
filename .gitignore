@@ -4,3 +4,4 @@ __pycache__/
 uv.lock
 Extract Color Palette.json
 glsl/_test_out/
+.DS_Store
