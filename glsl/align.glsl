@@ -23,7 +23,7 @@
 
 precision highp float;
 
-const int MAXDIM = 2048;
+const int MAXDIM = 4096;
 const float WHITE_KEY_DIST = 0.06;
 
 uniform sampler2D u_image0; // pass 0: frame; pass 1: params ping-pong
@@ -80,8 +80,8 @@ void main() {
                 if (maxX < 0) {
                     fragColor0 = vec4(0.0); // no foreground -> pass 1 no-ops
                 } else {
-                    fragColor0 = vec4(float(minX) / 2048.0, float(minY) / 2048.0,
-                                      float(maxX) / 2048.0, float(maxY) / 2048.0);
+                    fragColor0 = vec4(float(minX) / 4096.0, float(minY) / 4096.0,
+                                      float(maxX) / 4096.0, float(maxY) / 4096.0);
                 }
             } else {
                 fragColor0 = vec4(alphaMode ? 1.0 : 0.0, maxX < 0 ? 0.0 : 1.0, 0.0, 1.0);
@@ -94,7 +94,7 @@ void main() {
 
     // PASS 1: translate. Texture y=0 is the image BOTTOM (upload flip), so
     // the feet are the bbox's minY and the baseline sits margin*H above 0.
-    vec4 bbox = texelFetch(u_image0, ivec2(0, 0), 0) * 2048.0;
+    vec4 bbox = texelFetch(u_image0, ivec2(0, 0), 0) * 4096.0;
     vec4 mode = texelFetch(u_image0, ivec2(1, 0), 0);
     bool alphaMode = mode.x > 0.5;
     bool valid = mode.y > 0.5;

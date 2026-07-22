@@ -22,7 +22,7 @@ const int MAX_K = 32;
 const int MAX_CELL = 128; // max art-pixel size in source px
 
 uniform sampler2D u_image0; // pass 0: quantized source; pass 1: cell map
-uniform sampler2D u_image1; // params texture (step/phase, /2048)
+uniform sampler2D u_image1; // params texture (step/phase, /4096)
 uniform sampler2D u_image2; // palette stripes
 uniform vec2 u_resolution;
 uniform int u_int0;         // color_count K
@@ -52,7 +52,7 @@ int nearestPalette(vec3 p, int k) {
 void main() {
     ivec2 frag = ivec2(gl_FragCoord.xy);
     int k = kColors();
-    vec4 params = texelFetch(u_image1, ivec2(0, 4), 0) * 2048.0;
+    vec4 params = texelFetch(u_image1, ivec2(0, 4), 0) * 4096.0;
     float stepX = max(params.x, 1.0);
     float phX = params.y;
     float stepY = max(params.z, 1.0);

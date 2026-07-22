@@ -1,13 +1,13 @@
 #version 300 es
 // Pixel Snapper (native GLSL) — stage 2/3: grid detection.
 //
-// Node setup: core GLSLShader, size_mode = custom, width 2048, height 8.
+// Node setup: core GLSLShader, size_mode = custom, width 4096, height 8.
 //   image0 = quantized image from stage 1 (becomes ping-pong after pass 0)
 //   image1 = the SAME quantized image again (stable copy)
 //   u_int0 = pixel_size override (0 = auto-detect)
 // Output:
 //   IMAGE0 = params texture; every pixel holds
-//            (step_x, phase_x, step_y, phase_y) / 2048 as float RGBA.
+//            (step_x, phase_x, step_y, phase_y) / 4096 as float RGBA.
 //
 // Method — a GLSL port of the Python estimator (jitter-robust, unlike
 // autocorrelation which locks onto harmonics):
@@ -17,12 +17,12 @@
 // The whole estimator runs sequentially in one fragment of pass 1.
 //
 // Ping-pong layout: row 0 = column profile, row 1 = row profile,
-// row 4 px 0 = resolved params. Supports sources up to 2048 px per side.
+// row 4 px 0 = resolved params. Supports sources up to 4096 px per side.
 #pragma passes 3
 
 precision highp float;
 
-const int MAXDIM = 2048;
+const int MAXDIM = 4096;
 const int MAX_DIFFS = 700;
 const float PEAK_THRESHOLD = 0.2;  // fraction of profile max
 const int PEAK_MIN_DIST = 4;       // matches peak_distance_filter
@@ -154,7 +154,7 @@ void main() {
 
             float phX = bestPhase(sx, 0, W);
             float phY = bestPhase(sy, 1, H);
-            fragColor0 = vec4(sx / 2048.0, phX / 2048.0, sy / 2048.0, phY / 2048.0);
+            fragColor0 = vec4(sx / 4096.0, phX / 4096.0, sy / 4096.0, phY / 4096.0);
         } else {
             fragColor0 = texelFetch(u_image0, frag, 0);
         }

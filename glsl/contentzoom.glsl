@@ -26,7 +26,7 @@
 
 precision highp float;
 
-const int MAXDIM = 2048;
+const int MAXDIM = 4096;
 const float WHITE_KEY_DIST = 0.06;
 const float SEAM_BAND = 0.18;
 const float BASELINE = 0.08;   // feet margin as fraction of cell height
@@ -114,8 +114,8 @@ void main() {
             findSeams(W, H, alphaMode, yCut, xCutTop, xCutBot);
 
             if (frag.x == 0) {
-                fragColor0 = vec4(float(yCut) / 2048.0, float(xCutTop) / 2048.0,
-                                  float(xCutBot) / 2048.0, 1.0);
+                fragColor0 = vec4(float(yCut) / 4096.0, float(xCutTop) / 4096.0,
+                                  float(xCutBot) / 4096.0, 1.0);
             } else if (frag.x == 1) {
                 fragColor0 = vec4(alphaMode ? 1.0 : 0.0, 0.0, 0.0, 1.0);
             } else {
@@ -136,8 +136,8 @@ void main() {
                 if (maxX < 0) {
                     fragColor0 = vec4(0.0); // empty cell
                 } else {
-                    fragColor0 = vec4(float(minX) / 2048.0, float(minY) / 2048.0,
-                                      float(maxX) / 2048.0, float(maxY) / 2048.0);
+                    fragColor0 = vec4(float(minX) / 4096.0, float(minY) / 4096.0,
+                                      float(maxX) / 4096.0, float(maxY) / 4096.0);
                 }
             }
         } else {
@@ -147,7 +147,7 @@ void main() {
     }
 
     // PASS 1: re-render onto clean nominal quadrants with one uniform scale.
-    vec4 seams = texelFetch(u_image0, ivec2(0, 0), 0) * 2048.0;
+    vec4 seams = texelFetch(u_image0, ivec2(0, 0), 0) * 4096.0;
     bool alphaMode = texelFetch(u_image0, ivec2(1, 0), 0).x > 0.5;
     int yCut = int(seams.x + 0.5);
     int xCutTop = int(seams.y + 0.5);
@@ -162,7 +162,7 @@ void main() {
     float s = 1e9;
     bool anyValid = false;
     for (int i = 0; i < 4; i++) {
-        bboxes[i] = texelFetch(u_image0, ivec2(2 + i, 0), 0) * 2048.0;
+        bboxes[i] = texelFetch(u_image0, ivec2(2 + i, 0), 0) * 4096.0;
         valid[i] = bboxes[i].z >= bboxes[i].x && (bboxes[i].z + bboxes[i].w) > 0.0;
         if (valid[i]) {
             float bw = bboxes[i].z - bboxes[i].x + 1.0;

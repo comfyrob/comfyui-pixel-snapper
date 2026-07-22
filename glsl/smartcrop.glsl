@@ -30,7 +30,7 @@
 
 precision highp float;
 
-const int MAXDIM = 2048;
+const int MAXDIM = 4096;
 const float WHITE_KEY_DIST = 0.06;
 
 uniform sampler2D u_image0; // pass 0: sheet; pass 1: params ping-pong
@@ -114,8 +114,8 @@ void main() {
             }
 
             if (frag.x == 0) {
-                fragColor0 = vec4(float(bestY) / 2048.0, float(bestXTop) / 2048.0,
-                                  float(bestXBot) / 2048.0, 1.0);
+                fragColor0 = vec4(float(bestY) / 4096.0, float(bestXTop) / 4096.0,
+                                  float(bestXBot) / 4096.0, 1.0);
             } else {
                 fragColor0 = vec4(alphaMode ? 1.0 : 0.0, 0.0, 0.0, 1.0);
             }
@@ -129,7 +129,7 @@ void main() {
     // PASS 1: each output samples the sheet at its own cell origin, so all
     // four frames land at the canvas bottom-left in a shared coordinate
     // frame. A sampled pixel only shows if that frame actually owns it.
-    vec4 params = texelFetch(u_image0, ivec2(0, 0), 0) * 2048.0;
+    vec4 params = texelFetch(u_image0, ivec2(0, 0), 0) * 4096.0;
     bool alphaMode = texelFetch(u_image0, ivec2(1, 0), 0).x > 0.5;
     int yCut = int(params.x + 0.5);
     int xCutTop = int(params.y + 0.5);
