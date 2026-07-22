@@ -84,7 +84,27 @@ void main() {
                                       float(maxX) / 4096.0, float(maxY) / 4096.0);
                 }
             } else {
-                fragColor0 = vec4(alphaMode ? 1.0 : 0.0, maxX < 0 ? 0.0 : 1.0, 0.0, 1.0);
+                // feet anchor: x-centroid of the character's lowest rows
+                // (bbox centers sway with swords/effects; feet stay planted)
+                float anchorX = (float(minX) + float(maxX)) * 0.5;
+                if (maxX >= 0) {
+                    int bandTop = minY + max(int(0.18 * float(maxY - minY + 1)), 6);
+                    float sumX = 0.0;
+                    float cnt = 0.0;
+                    for (int y = 0; y < MAXDIM; y++) {
+                        if (y > bandTop || y >= H) break;
+                        if (y < minY) continue;
+                        for (int x = 0; x < MAXDIM; x++) {
+                            if (x >= W) break;
+                            vec4 c = texelFetch(u_image1, ivec2(x, y), 0);
+                            bool fg = alphaMode ? (c.a >= 0.5) : (c.a >= 0.5 && isFgWhite(c));
+                            if (fg) { sumX += float(x); cnt += 1.0; }
+                        }
+                    }
+                    if (cnt > 0.0) anchorX = sumX / cnt;
+                }
+                fragColor0 = vec4(alphaMode ? 1.0 : 0.0, maxX < 0 ? 0.0 : 1.0,
+                                  anchorX / 4096.0, 1.0);
             }
         } else {
             fragColor0 = vec4(0.0);
@@ -105,7 +125,8 @@ void main() {
     }
 
     float margin = u_float0 <= 0.0 ? 0.06 : u_float0;
-    int dx = int(floor((bbox.x + bbox.z) * 0.5 - float(W) * 0.5 + 0.5));
+    float anchorX = mode.z * 4096.0;
+    int dx = int(floor(anchorX - float(W) * 0.5 + 0.5));
     int dy = u_bool0 ? int(bbox.y + 0.5) - int(margin * float(H) + 0.5) : 0;
 
     ivec2 src = frag + ivec2(dx, dy);

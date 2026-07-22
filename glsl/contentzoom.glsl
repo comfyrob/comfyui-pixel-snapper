@@ -99,9 +99,11 @@ void main() {
     int W = sz.x;
     int H = sz.y;
 
-    // PASS 0: params. (0,0)=seams, (1,0)=mode, (2..5,0)=per-cell bboxes.
+    // PASS 0: params. (0,0)=seams, (1,0)=mode, (2..5,0)=per-cell bboxes,
+    // (6..9,0)=per-cell feet anchors (x-centroid of the lowest ~18% of the
+    // character — extremities like swords swing the bbox, feet stay planted).
     if (u_pass == 0) {
-        if (frag.y == 0 && frag.x < 6) {
+        if (frag.y == 0 && frag.x < 10) {
             bool alphaMode = false;
             for (int y = 0; y < MAXDIM; y++) {
                 if (y >= H || alphaMode) break;
@@ -119,7 +121,8 @@ void main() {
             } else if (frag.x == 1) {
                 fragColor0 = vec4(alphaMode ? 1.0 : 0.0, 0.0, 0.0, 1.0);
             } else {
-                int cell = frag.x - 2;
+                int cell = (frag.x - 2) % 4;
+                bool wantAnchor = frag.x >= 6;
                 int minX = MAXDIM; int maxX = -1; int minY = MAXDIM; int maxY = -1;
                 for (int y = 0; y < MAXDIM; y++) {
                     if (y >= H) break;
@@ -135,9 +138,28 @@ void main() {
                 }
                 if (maxX < 0) {
                     fragColor0 = vec4(0.0); // empty cell
-                } else {
+                } else if (!wantAnchor) {
                     fragColor0 = vec4(float(minX) / 4096.0, float(minY) / 4096.0,
                                       float(maxX) / 4096.0, float(maxY) / 4096.0);
+                } else {
+                    // feet band: lowest rows of the character (texture y up)
+                    int bandTop = minY + max(int(0.18 * float(maxY - minY + 1)), 6);
+                    float sumX = 0.0;
+                    float cnt = 0.0;
+                    for (int y = 0; y < MAXDIM; y++) {
+                        if (y > bandTop || y >= H) break;
+                        if (y < minY) continue;
+                        for (int x = 0; x < MAXDIM; x++) {
+                            if (x >= W) break;
+                            ivec2 p = ivec2(x, y);
+                            if (ownerOf(p, yCut, xCutTop, xCutBot) != cell) continue;
+                            if (isFgColor(texelFetch(u_image1, p, 0), alphaMode)) {
+                                sumX += float(x); cnt += 1.0;
+                            }
+                        }
+                    }
+                    float anchorX = cnt > 0.0 ? sumX / cnt : (float(minX) + float(maxX)) * 0.5;
+                    fragColor0 = vec4(anchorX / 4096.0, cnt > 0.0 ? 1.0 : 0.0, 0.0, 1.0);
                 }
             }
         } else {
@@ -158,16 +180,23 @@ void main() {
     vec4 blank = alphaMode ? vec4(0.0) : vec4(1.0, 1.0, 1.0, 1.0);
 
     vec4 bboxes[4];
+    float anchors[4];
     bool valid[4];
     float s = 1e9;
     bool anyValid = false;
     for (int i = 0; i < 4; i++) {
         bboxes[i] = texelFetch(u_image0, ivec2(2 + i, 0), 0) * 4096.0;
+        anchors[i] = texelFetch(u_image0, ivec2(6 + i, 0), 0).x * 4096.0;
         valid[i] = bboxes[i].z >= bboxes[i].x && (bboxes[i].z + bboxes[i].w) > 0.0;
         if (valid[i]) {
-            float bw = bboxes[i].z - bboxes[i].x + 1.0;
+            // content is positioned by its feet anchor, so the fit must
+            // respect the asymmetric extents about that anchor (a long
+            // sword on one side must not clip the cell edge)
+            float extL = max(anchors[i] - bboxes[i].x + 1.0, 1.0);
+            float extR = max(bboxes[i].z - anchors[i] + 1.0, 1.0);
             float bh = bboxes[i].w - bboxes[i].y + 1.0;
-            s = min(s, fill * min(halfW / bw, halfH / bh));
+            s = min(s, fill * min(min((halfW * 0.5) / extL, (halfW * 0.5) / extR),
+                                  halfH / bh));
             anyValid = true;
         }
     }
@@ -183,7 +212,7 @@ void main() {
     vec2 cellDst = vec2(float(col) * halfW, topRow ? halfH : 0.0);
     float srcCellBottom = topRow ? float(yCut + 1) : 0.0;
 
-    float anchorSrcX = (bboxes[i].x + bboxes[i].z) * 0.5;
+    float anchorSrcX = anchors[i];
     float anchorDstX = cellDst.x + halfW * 0.5;
     float srcX = anchorSrcX + (float(frag.x) - anchorDstX) / s;
 
