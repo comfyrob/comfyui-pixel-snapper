@@ -145,7 +145,25 @@ def main():
         check("transparent corner stays transparent", (corner_alpha == 0).all(),
               f"alphas={np.unique(corner_alpha)}")
 
-    # --- 5. validation errors --------------------------------------------
+    # --- 5. sharp-edge grid must not gain a sliver cell -------------------
+    # Perfectly sharp edges create twin gradient peaks; the walker snaps to
+    # the first of each tie, shifting cuts 1px early and historically leaving
+    # a 1px sliver cell at the far edge (e.g. 25x24 for a true 24x24 grid).
+    sharp_cells = rng.integers(0, len(PALETTE), size=(GRID, GRID))
+    sharp = np.zeros((GRID * CELL, GRID * CELL, 4), dtype=np.uint8)
+    for gy in range(GRID):
+        for gx in range(GRID):
+            sharp[gy * CELL:(gy + 1) * CELL, gx * CELL:(gx + 1) * CELL, :3] = \
+                PALETTE[sharp_cells[gy, gx]]
+    sharp[:, :, 3] = 255
+    for cfg in (Config(k_colors=8), Config(k_colors=8, pixel_size_override=float(CELL))):
+        r = snap_pixels(sharp, cfg)
+        h5, w5 = r.native_rgba.shape[:2]
+        label = "override" if cfg.pixel_size_override else "auto"
+        check(f"sharp-edge grid exact size ({label})", (h5, w5) == (GRID, GRID),
+              f"got {w5}x{h5}, expected {GRID}x{GRID}")
+
+    # --- 6. validation errors --------------------------------------------
     for bad in ["", "zzz", "12345", "0d2b45,xyz123"]:
         try:
             parse_palette_hex(bad)

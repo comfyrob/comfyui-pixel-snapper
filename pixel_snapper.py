@@ -196,7 +196,10 @@ def estimate_step_size(profile: np.ndarray, config: Config) -> Optional[float]:
     threshold = max_val * config.peak_threshold_multiplier
 
     inner = profile[1:-1]
-    is_peak = (inner > threshold) & (inner > profile[:-2]) & (inner > profile[2:])
+    # >= on the left neighbor so a plateau of equal peaks still yields one
+    # peak (its right edge). Perfectly sharp pixel edges produce twin equal
+    # peaks that a strict > on both sides would throw away entirely.
+    is_peak = (inner > threshold) & (inner >= profile[:-2]) & (inner > profile[2:])
     peaks = (np.nonzero(is_peak)[0] + 1).tolist()
     if len(peaks) < 2:
         return None
@@ -393,6 +396,26 @@ def stabilize_both_axes(profile_x, profile_y, raw_col_cuts, raw_row_cuts,
     return col_cuts, row_cuts
 
 
+def merge_edge_slivers(cuts: list) -> list:
+    """Fold degenerate edge cells into their neighbors.
+
+    A perfectly sharp edge between two art pixels yields two equal gradient
+    peaks side by side; the walker snaps to the first of the tie, landing
+    every cut one pixel early. The accumulated shift leaves a ~1px sliver
+    cell at the far edge (e.g. 129 cells for a true 128-cell grid). Any edge
+    cell narrower than half the median cell width is merged away.
+    """
+    if len(cuts) <= 2:
+        return cuts
+    widths = [b - a for a, b in zip(cuts, cuts[1:])]
+    median = sorted(widths)[len(widths) // 2]
+    if widths[-1] < median / 2:
+        cuts.pop(-2)
+    if len(cuts) > 2 and widths[0] < median / 2:
+        cuts.pop(1)
+    return cuts
+
+
 def resample(img: np.ndarray, cols: list, rows: list) -> np.ndarray:
     """Collapse each grid cell to one pixel via majority vote (ties -> lowest RGBA value).
 
@@ -477,6 +500,8 @@ def snap_pixels(rgba: np.ndarray, config: Optional[Config] = None) -> SnapResult
     col_cuts, row_cuts = stabilize_both_axes(
         profile_x, profile_y, raw_col_cuts, raw_row_cuts, width, height, config
     )
+    col_cuts = merge_edge_slivers(col_cuts)
+    row_cuts = merge_edge_slivers(row_cuts)
 
     snapped = resample(analysis_img, col_cuts, row_cuts)
     if config.palette:

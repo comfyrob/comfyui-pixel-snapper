@@ -5,9 +5,9 @@ import torch
 import torch.nn.functional as F
 from typing_extensions import override
 
-from comfy_api.latest import ComfyExtension, io, ui
+from comfy_api.latest import ComfyExtension, io
 
-from .pixel_snapper import Config, PixelSnapperError, parse_palette_hex, snap_pixels
+from .pixel_snapper import Config, PixelSnapperError, snap_pixels
 
 
 class PixelSnapper(io.ComfyNode):
@@ -51,16 +51,6 @@ class PixelSnapper(io.ComfyNode):
                         "pixel_size = 16. Leave at 0 to measure it automatically. Set "
                         "it manually if auto-detect gets it wrong, or when processing "
                         "a batch/animation so every frame uses the same grid."
-                    ),
-                ),
-                io.String.Input(
-                    "palette",
-                    default="",
-                    optional=True,
-                    placeholder="optional hex palette: 0d2b45,203c56,544e68,...",
-                    tooltip=(
-                        "Optional fixed palette as comma-separated 6-digit hex colors. "
-                        "Leave empty to use the colors found by quantization."
                     ),
                 ),
                 io.Mask.Input(
@@ -109,12 +99,8 @@ class PixelSnapper(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, image, color_count, pixel_size, palette="", mask=None):
+    def execute(cls, image, color_count, pixel_size, mask=None):
         batch, height, width, channels = image.shape
-
-        pal = None
-        if palette is not None and palette.strip():
-            pal = parse_palette_hex(palette)
 
         if mask is not None:
             if mask.dim() == 2:
@@ -128,7 +114,6 @@ class PixelSnapper(io.ComfyNode):
         config = Config(
             k_colors=color_count,
             pixel_size_override=float(pixel_size) if pixel_size > 0 else None,
-            palette=pal,
         )
 
         natives = []
@@ -170,14 +155,7 @@ class PixelSnapper(io.ComfyNode):
             mode="nearest-exact",
         ).permute(0, 2, 3, 1)
 
-        return io.NodeOutput(
-            full,
-            native_image,
-            native_mask,
-            float(detected),
-            # Inline preview on the node itself, like PreviewImage
-            ui=ui.PreviewImage(full, cls=cls),
-        )
+        return io.NodeOutput(full, native_image, native_mask, float(detected))
 
 
 class PixelSnapperExtension(ComfyExtension):

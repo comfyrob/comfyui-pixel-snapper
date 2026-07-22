@@ -34,7 +34,6 @@ Only dependency is `numpy`, which ComfyUI already ships.
 | `image` | IMAGE | The pixel-art-style image to fix. |
 | `color_count` | INT | Palette size for k-means quantization (default 16). |
 | `pixel_size` | INT | Size of one art pixel in the source. **0 = auto-detect.** Set explicitly for batches/animations so every frame gets the same grid. |
-| `palette` | STRING | Optional fixed palette: comma-separated 6-digit hex (`0d2b45,203c56,...`). Empty = use quantized colors. Paste straight from [Lospec](https://lospec.com/palette-list). |
 | `mask` | MASK | Optional transparency (1 = transparent, same convention as LoadImage's MASK output). |
 
 ### Outputs
@@ -54,7 +53,7 @@ Only dependency is `numpy`, which ComfyUI already ships.
 3. **Cut** — an elastic walker places cut lines, snapping each to the strongest nearby
    color edge, then cross-validates both axes.
 4. **Resample** — each cell becomes one pixel by majority vote (which preserves
-   dithering), optionally remapped to your fixed palette.
+   dithering).
 
 ## Testing without ComfyUI
 
