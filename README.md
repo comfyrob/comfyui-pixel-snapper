@@ -55,6 +55,13 @@ Only dependency is `numpy`, which ComfyUI already ships.
 4. **Resample** — each cell becomes one pixel by majority vote (which preserves
    dithering).
 
+## Native GLSL edition
+
+Prefer zero custom nodes? [`glsl/`](glsl/) contains the same pipeline built
+entirely from core ComfyUI `GLSLShader` nodes — load
+[`glsl/pixel_snapper_glsl.json`](glsl/pixel_snapper_glsl.json) as a workflow.
+See [`glsl/README.md`](glsl/README.md) for capabilities and trade-offs.
+
 ## Testing without ComfyUI
 
 The algorithm lives in `pixel_snapper.py` with no ComfyUI or torch dependency:

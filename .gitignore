@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 uv.lock
 Extract Color Palette.json
+glsl/_test_out/
