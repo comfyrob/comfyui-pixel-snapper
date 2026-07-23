@@ -216,18 +216,16 @@ void main() {
     float s = 1e9;
     for (int i = 0; i < 4; i++) {
         if (!valid[i]) continue;
-        // content is positioned by its feet anchor, so the fit must
-        // respect the asymmetric extents about that anchor (a long
-        // sword on one side must not clip the cell edge)
-        float extL = max(anchors[i] - bboxes[i].x + 1.0, 1.0);
-        float extR = max(bboxes[i].z - anchors[i] + 1.0, 1.0);
+        // scale is bounded by the BBOX (symmetric): an asymmetric pose
+        // must never shrink the whole sheet. Positioning handles asymmetry
+        // separately, with a clamp instead of a scale penalty.
+        float bw = bboxes[i].z - bboxes[i].x + 1.0;
         // vertical: with lock_feet every frame re-bases to the baseline
         // (bound its height); without, bound its top extent above the
         // SHARED GROUND so arcs fit without margins throttling the zoom
         float vExt = u_bool0 ? (bboxes[i].w - bboxes[i].y + 1.0)
                              : max(bboxes[i].w - cellBases[i] - ground + 1.0, 1.0);
-        s = min(s, fill * min(min((halfW * 0.5) / extL, (halfW * 0.5) / extR),
-                              halfH / vExt));
+        s = min(s, fill * min(halfW / bw, halfH / vExt));
     }
     s = clamp(s, 0.25, 6.0);
 
@@ -241,7 +239,15 @@ void main() {
     float srcCellBottom = topRow ? float((col == 0 ? yCutL : yCutR) + 1) : 0.0;
 
     float anchorSrcX = anchors[i];
-    float anchorDstX = cellDst.x + halfW * 0.5;
+    // ideal: feet anchor at cell center (zero body sway). Clamp so the
+    // scaled bbox stays inside the cell - an extreme lunge slides its
+    // body off-center only by the minimum necessary.
+    float pad = 0.5 * (1.0 - fill) * halfW;
+    float dstLo = cellDst.x + pad + s * (anchorSrcX - bboxes[i].x);
+    float dstHi = cellDst.x + halfW - pad - s * (bboxes[i].z - anchorSrcX);
+    float anchorDstX = dstLo <= dstHi
+        ? clamp(cellDst.x + halfW * 0.5, dstLo, dstHi)
+        : (dstLo + dstHi) * 0.5;
     float srcX = anchorSrcX + (float(frag.x) - anchorDstX) / s;
 
     float srcY;

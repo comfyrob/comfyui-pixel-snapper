@@ -126,8 +126,19 @@ void main() {
 
     float margin = u_float0 <= 0.0 ? 0.06 : u_float0;
     float anchorX = mode.z * 4096.0;
-    int dx = int(floor(anchorX - float(W) * 0.5 + 0.5));
-    int dy = u_bool0 ? int(bbox.y + 0.5) - int(margin * float(H) + 0.5) : 0;
+    // clamp translations so the bbox stays inside the frame: alignment
+    // yields to visibility (never push a sword out of frame)
+    float dxf = floor(anchorX - float(W) * 0.5 + 0.5);
+    float dxLo = bbox.z - float(W - 1);
+    float dxHi = bbox.x;
+    int dx = int(dxLo <= dxHi ? clamp(dxf, dxLo, dxHi) : (dxLo + dxHi) * 0.5);
+    int dy = 0;
+    if (u_bool0) {
+        float dyf = floor(bbox.y - margin * float(H) + 0.5);
+        float dyLo = bbox.w - float(H - 1);
+        float dyHi = bbox.y;
+        dy = int(dyLo <= dyHi ? clamp(dyf, dyLo, dyHi) : (dyLo + dyHi) * 0.5);
+    }
 
     ivec2 src = frag + ivec2(dx, dy);
     if (src.x < 0 || src.x >= W || src.y < 0 || src.y >= H) {
