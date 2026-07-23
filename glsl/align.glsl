@@ -48,34 +48,44 @@ void main() {
     int H = sz.y;
 
     // PASS 0: scan the frame once; write the foreground bbox to pixel (0,0)
-    // and the detection mode to pixel (1,0).
+    // and the detection mode to pixel (1,0). The bbox is SPECK-TOLERANT: a
+    // row/column only counts if it has >= MIN_RUN foreground pixels, so a
+    // stray segmentation speck cannot stretch the bbox and mis-anchor.
     if (u_pass == 0) {
         if (frag.y == 0 && frag.x < 2) {
-            int aMinX = MAXDIM; int aMaxX = -1; int aMinY = MAXDIM; int aMaxY = -1;
-            int wMinX = MAXDIM; int wMaxX = -1; int wMinY = MAXDIM; int wMaxY = -1;
             int transparentCount = 0;
             for (int y = 0; y < MAXDIM; y++) {
-                if (y >= H) break;
+                if (y >= H || transparentCount > 0) break;
                 for (int x = 0; x < MAXDIM; x++) {
                     if (x >= W) break;
-                    vec4 c = texelFetch(u_image1, ivec2(x, y), 0);
-                    if (c.a < 0.5) {
-                        transparentCount++;
-                    } else {
-                        aMinX = min(aMinX, x); aMaxX = max(aMaxX, x);
-                        aMinY = min(aMinY, y); aMaxY = max(aMaxY, y);
-                        if (isFgWhite(c)) {
-                            wMinX = min(wMinX, x); wMaxX = max(wMaxX, x);
-                            wMinY = min(wMinY, y); wMaxY = max(wMaxY, y);
-                        }
-                    }
+                    if (texelFetch(u_image1, ivec2(x, y), 0).a < 0.5) { transparentCount++; break; }
                 }
             }
             bool alphaMode = transparentCount > 0;
-            int minX = alphaMode ? aMinX : wMinX;
-            int maxX = alphaMode ? aMaxX : wMaxX;
-            int minY = alphaMode ? aMinY : wMinY;
-            int maxY = alphaMode ? aMaxY : wMaxY;
+            const int MIN_RUN = 3;
+            int minX = MAXDIM; int maxX = -1; int minY = MAXDIM; int maxY = -1;
+            for (int y = 0; y < MAXDIM; y++) {
+                if (y >= H) break;
+                int rowCount = 0;
+                for (int x = 0; x < MAXDIM; x++) {
+                    if (x >= W) break;
+                    vec4 c = texelFetch(u_image1, ivec2(x, y), 0);
+                    bool fg = alphaMode ? (c.a >= 0.5) : (c.a >= 0.5 && isFgWhite(c));
+                    if (fg) rowCount++;
+                }
+                if (rowCount >= MIN_RUN) { minY = min(minY, y); maxY = max(maxY, y); }
+            }
+            for (int x = 0; x < MAXDIM; x++) {
+                if (x >= W) break;
+                int colCount = 0;
+                for (int y = 0; y < MAXDIM; y++) {
+                    if (y >= H) break;
+                    vec4 c = texelFetch(u_image1, ivec2(x, y), 0);
+                    bool fg = alphaMode ? (c.a >= 0.5) : (c.a >= 0.5 && isFgWhite(c));
+                    if (fg) colCount++;
+                }
+                if (colCount >= MIN_RUN) { minX = min(minX, x); maxX = max(maxX, x); }
+            }
             if (frag.x == 0) {
                 if (maxX < 0) {
                     fragColor0 = vec4(0.0); // no foreground -> pass 1 no-ops
