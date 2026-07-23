@@ -193,31 +193,42 @@ void main() {
 
     vec4 bboxes[4];
     float anchors[4];
+    float cellBases[4];
     bool valid[4];
-    float s = 1e9;
     bool anyValid = false;
+    // shared ground: the lowest feet-altitude across frames. Grounded frames
+    // define the ground line; airborne frames keep their EXTRA altitude
+    // relative to it (the arc), instead of measuring from the cell base
+    // (which would count empty under-feet margin and kill the zoom).
+    float ground = 1e9;
     for (int i = 0; i < 4; i++) {
         bboxes[i] = texelFetch(u_image0, ivec2(2 + i, 0), 0) * 4096.0;
         anchors[i] = texelFetch(u_image0, ivec2(6 + i, 0), 0).x * 4096.0;
+        cellBases[i] = (i < 2) ? float(((i == 0 ? yCutL : yCutR)) + 1) : 0.0;
         valid[i] = bboxes[i].z >= bboxes[i].x && (bboxes[i].z + bboxes[i].w) > 0.0;
         if (valid[i]) {
-            // content is positioned by its feet anchor, so the fit must
-            // respect the asymmetric extents about that anchor (a long
-            // sword on one side must not clip the cell edge)
-            float extL = max(anchors[i] - bboxes[i].x + 1.0, 1.0);
-            float extR = max(bboxes[i].z - anchors[i] + 1.0, 1.0);
-            // vertical: with lock_feet the content re-bases to the baseline
-            // (bound its height); without, it keeps its in-cell altitude
-            // (bound its TOP EXTENT above the cell base, or arcs clip)
-            float cellBase = (i < 2) ? float(((i == 0 ? yCutL : yCutR)) + 1) : 0.0;
-            float vExt = u_bool0 ? (bboxes[i].w - bboxes[i].y + 1.0)
-                                 : max(bboxes[i].w - cellBase + 1.0, 1.0);
-            s = min(s, fill * min(min((halfW * 0.5) / extL, (halfW * 0.5) / extR),
-                                  halfH / vExt));
             anyValid = true;
+            ground = min(ground, bboxes[i].y - cellBases[i]);
         }
     }
     if (!anyValid) { fragColor0 = texelFetch(u_image1, frag, 0); return; }
+
+    float s = 1e9;
+    for (int i = 0; i < 4; i++) {
+        if (!valid[i]) continue;
+        // content is positioned by its feet anchor, so the fit must
+        // respect the asymmetric extents about that anchor (a long
+        // sword on one side must not clip the cell edge)
+        float extL = max(anchors[i] - bboxes[i].x + 1.0, 1.0);
+        float extR = max(bboxes[i].z - anchors[i] + 1.0, 1.0);
+        // vertical: with lock_feet every frame re-bases to the baseline
+        // (bound its height); without, bound its top extent above the
+        // SHARED GROUND so arcs fit without margins throttling the zoom
+        float vExt = u_bool0 ? (bboxes[i].w - bboxes[i].y + 1.0)
+                             : max(bboxes[i].w - cellBases[i] - ground + 1.0, 1.0);
+        s = min(s, fill * min(min((halfW * 0.5) / extL, (halfW * 0.5) / extR),
+                              halfH / vExt));
+    }
     s = clamp(s, 0.25, 6.0);
 
     // destination cell = nominal quadrant of this output pixel
@@ -234,11 +245,13 @@ void main() {
     float srcX = anchorSrcX + (float(frag.x) - anchorDstX) / s;
 
     float srcY;
+    float feetDstY = cellDst.y + BASELINE * halfH;
     if (u_bool0) {
-        float feetDstY = cellDst.y + BASELINE * halfH;
         srcY = bboxes[i].y + (float(frag.y) - feetDstY) / s;
     } else {
-        srcY = srcCellBottom + (float(frag.y) - cellDst.y) / s;
+        // the shared ground line maps to the baseline; frames above the
+        // ground keep their extra altitude, scaled - the arc survives
+        srcY = srcCellBottom + ground + (float(frag.y) - feetDstY) / s;
     }
 
     ivec2 src = ivec2(int(srcX + 0.5), int(srcY + 0.5));
