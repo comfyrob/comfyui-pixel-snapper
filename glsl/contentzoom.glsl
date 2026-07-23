@@ -47,22 +47,31 @@ bool isFgColor(vec4 c, bool alphaMode) {
     return max(d.r, max(d.g, d.b)) > WHITE_KEY_DIST;
 }
 
-// ---- seam search (same approach as smartcrop.glsl) ----
-void findSeams(int W, int H, bool alphaMode, out int yCut, out int xCutTop, out int xCutBot) {
+// ---- seam search: horizontal seams computed PER COLUMN HALF so a sword
+// raised across the midline in one column only lifts that side's seam ----
+void findSeams(int W, int H, bool alphaMode, out int yCutL, out int yCutR, out int xCutTop, out int xCutBot) {
     int yLo = int(float(H) * (0.5 - SEAM_BAND));
     int yHi = int(float(H) * (0.5 + SEAM_BAND));
-    yCut = H / 2;
-    float bestYCost = 1e9;
-    for (int y = 0; y < MAXDIM; y++) {
-        if (y < yLo) continue;
-        if (y > yHi || y >= H) break;
-        float cost = 0.0;
-        for (int x = 0; x < MAXDIM; x++) {
-            if (x >= W) break;
-            if (isFgColor(texelFetch(u_image1, ivec2(x, y), 0), alphaMode)) cost += 1.0;
+    yCutL = H / 2;
+    yCutR = H / 2;
+    for (int side = 0; side < 2; side++) {
+        int x0 = side == 0 ? 0 : W / 2;
+        int x1 = side == 0 ? W / 2 : W;
+        float bestCostY = 1e9;
+        int bestY = H / 2;
+        for (int y = 0; y < MAXDIM; y++) {
+            if (y < yLo) continue;
+            if (y > yHi || y >= H) break;
+            float cost = 0.0;
+            for (int x = 0; x < MAXDIM; x++) {
+                if (x < x0) continue;
+                if (x >= x1 || x >= W) break;
+                if (isFgColor(texelFetch(u_image1, ivec2(x, y), 0), alphaMode)) cost += 1.0;
+            }
+            cost += abs(float(y) - float(H) * 0.5) * 0.01;
+            if (cost < bestCostY) { bestCostY = cost; bestY = y; }
         }
-        cost += abs(float(y) - float(H) * 0.5) * 0.01;
-        if (cost < bestYCost) { bestYCost = cost; yCut = y; }
+        if (side == 0) yCutL = bestY; else yCutR = bestY;
     }
     int xLo = int(float(W) * (0.5 - SEAM_BAND));
     int xHi = int(float(W) * (0.5 + SEAM_BAND));
@@ -77,7 +86,8 @@ void findSeams(int W, int H, bool alphaMode, out int yCut, out int xCutTop, out 
             float cost = 0.0;
             for (int y = 0; y < MAXDIM; y++) {
                 if (y >= H) break;
-                bool inHalf = (hIdx == 0) ? (y > yCut) : (y <= yCut);
+                int yc = x < W / 2 ? yCutL : yCutR;
+                bool inHalf = (hIdx == 0) ? (y > yc) : (y <= yc);
                 if (inHalf && isFgColor(texelFetch(u_image1, ivec2(x, y), 0), alphaMode)) cost += 1.0;
             }
             cost += abs(float(x) - float(W) * 0.5) * 0.01;
@@ -87,8 +97,9 @@ void findSeams(int W, int H, bool alphaMode, out int yCut, out int xCutTop, out 
     }
 }
 
-int ownerOf(ivec2 p, int yCut, int xCutTop, int xCutBot) {
-    bool topRow = p.y > yCut;                 // texture y up = image top
+int ownerOf(ivec2 p, int W, int yCutL, int yCutR, int xCutTop, int xCutBot) {
+    int yc = p.x < W / 2 ? yCutL : yCutR;     // per-side horizontal seam
+    bool topRow = p.y > yc;                   // texture y up = image top
     bool leftCol = p.x < (topRow ? xCutTop : xCutBot);
     return topRow ? (leftCol ? 0 : 1) : (leftCol ? 2 : 3);
 }
@@ -112,12 +123,12 @@ void main() {
                     if (texelFetch(u_image1, ivec2(x, y), 0).a < 0.5) { alphaMode = true; break; }
                 }
             }
-            int yCut; int xCutTop; int xCutBot;
-            findSeams(W, H, alphaMode, yCut, xCutTop, xCutBot);
+            int yCutL; int yCutR; int xCutTop; int xCutBot;
+            findSeams(W, H, alphaMode, yCutL, yCutR, xCutTop, xCutBot);
 
             if (frag.x == 0) {
-                fragColor0 = vec4(float(yCut) / 4096.0, float(xCutTop) / 4096.0,
-                                  float(xCutBot) / 4096.0, 1.0);
+                fragColor0 = vec4(float(yCutL) / 4096.0, float(yCutR) / 4096.0,
+                                  float(xCutTop) / 4096.0, float(xCutBot) / 4096.0);
             } else if (frag.x == 1) {
                 fragColor0 = vec4(alphaMode ? 1.0 : 0.0, 0.0, 0.0, 1.0);
             } else {
@@ -129,7 +140,7 @@ void main() {
                     for (int x = 0; x < MAXDIM; x++) {
                         if (x >= W) break;
                         ivec2 p = ivec2(x, y);
-                        if (ownerOf(p, yCut, xCutTop, xCutBot) != cell) continue;
+                        if (ownerOf(p, W, yCutL, yCutR, xCutTop, xCutBot) != cell) continue;
                         if (isFgColor(texelFetch(u_image1, p, 0), alphaMode)) {
                             minX = min(minX, x); maxX = max(maxX, x);
                             minY = min(minY, y); maxY = max(maxY, y);
@@ -152,7 +163,7 @@ void main() {
                         for (int x = 0; x < MAXDIM; x++) {
                             if (x >= W) break;
                             ivec2 p = ivec2(x, y);
-                            if (ownerOf(p, yCut, xCutTop, xCutBot) != cell) continue;
+                            if (ownerOf(p, W, yCutL, yCutR, xCutTop, xCutBot) != cell) continue;
                             if (isFgColor(texelFetch(u_image1, p, 0), alphaMode)) {
                                 sumX += float(x); cnt += 1.0;
                             }
@@ -171,9 +182,10 @@ void main() {
     // PASS 1: re-render onto clean nominal quadrants with one uniform scale.
     vec4 seams = texelFetch(u_image0, ivec2(0, 0), 0) * 4096.0;
     bool alphaMode = texelFetch(u_image0, ivec2(1, 0), 0).x > 0.5;
-    int yCut = int(seams.x + 0.5);
-    int xCutTop = int(seams.y + 0.5);
-    int xCutBot = int(seams.z + 0.5);
+    int yCutL = int(seams.x + 0.5);
+    int yCutR = int(seams.y + 0.5);
+    int xCutTop = int(seams.z + 0.5);
+    int xCutBot = int(seams.w + 0.5);
     float fill = u_float0 <= 0.0 ? 0.90 : u_float0;
     float halfW = float(W) * 0.5;
     float halfH = float(H) * 0.5;
@@ -194,9 +206,14 @@ void main() {
             // sword on one side must not clip the cell edge)
             float extL = max(anchors[i] - bboxes[i].x + 1.0, 1.0);
             float extR = max(bboxes[i].z - anchors[i] + 1.0, 1.0);
-            float bh = bboxes[i].w - bboxes[i].y + 1.0;
+            // vertical: with lock_feet the content re-bases to the baseline
+            // (bound its height); without, it keeps its in-cell altitude
+            // (bound its TOP EXTENT above the cell base, or arcs clip)
+            float cellBase = (i < 2) ? float(((i == 0 ? yCutL : yCutR)) + 1) : 0.0;
+            float vExt = u_bool0 ? (bboxes[i].w - bboxes[i].y + 1.0)
+                                 : max(bboxes[i].w - cellBase + 1.0, 1.0);
             s = min(s, fill * min(min((halfW * 0.5) / extL, (halfW * 0.5) / extR),
-                                  halfH / bh));
+                                  halfH / vExt));
             anyValid = true;
         }
     }
@@ -210,7 +227,7 @@ void main() {
     if (!valid[i]) { fragColor0 = blank; return; }
 
     vec2 cellDst = vec2(float(col) * halfW, topRow ? halfH : 0.0);
-    float srcCellBottom = topRow ? float(yCut + 1) : 0.0;
+    float srcCellBottom = topRow ? float((col == 0 ? yCutL : yCutR) + 1) : 0.0;
 
     float anchorSrcX = anchors[i];
     float anchorDstX = cellDst.x + halfW * 0.5;
@@ -226,7 +243,7 @@ void main() {
 
     ivec2 src = ivec2(int(srcX + 0.5), int(srcY + 0.5));
     if (src.x < 0 || src.x >= W || src.y < 0 || src.y >= H
-        || ownerOf(src, yCut, xCutTop, xCutBot) != i) {
+        || ownerOf(src, W, yCutL, yCutR, xCutTop, xCutBot) != i) {
         fragColor0 = blank;
     } else {
         fragColor0 = texelFetch(u_image1, src, 0);
